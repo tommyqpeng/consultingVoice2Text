@@ -25,7 +25,7 @@ if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 
 st.title("Interview Question Survey")
-st.info("Please answer in **English**. You may upload an audio response (MP3/WAV) or type it.")
+st.info("Please answer in **English**. You may upload an audio response (MP3/WAV/M4A) or type it.")
 
 if st.session_state.password_attempts >= 3:
     st.error("Too many incorrect attempts. Reload the page to try again.")
