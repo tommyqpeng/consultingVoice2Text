@@ -1,10 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Sun May 18 14:42:19 2025
-
-@author: tommy
-"""
-
 import streamlit as st
 import requests
 import json
@@ -12,7 +5,6 @@ import gspread
 import re
 from datetime import datetime
 from oauth2client.service_account import ServiceAccountCredentials
-from streamlit_audio_recorder import audio_recorder
 
 # --- Google Sheets Setup ---
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
@@ -26,23 +18,18 @@ DEEPSEEK_API_KEY = st.secrets["DEEPSEEK_API_KEY"]
 DEEPGRAM_API_KEY = st.secrets["DEEPGRAM_API_KEY"]
 APP_PASSWORD = st.secrets["APP_PASSWORD"]
 
-# --- Session State ---
+# --- Auth ---
 if "password_attempts" not in st.session_state:
     st.session_state.password_attempts = 0
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 
-# --- UI Title ---
 st.title("Interview Question Survey")
-st.info("Please answer in *English*. You can type, record your voice, or upload an audio file.")
+st.info("Please answer in **English**. You may upload an audio response (MP3/WAV) or type it.")
 
-# --- Password Gate ---
 if st.session_state.password_attempts >= 3:
-    st.error("Too many incorrect attempts. Please reload the page to try again.")
+    st.error("Too many incorrect attempts. Reload the page to try again.")
     st.stop()
-
-if "password_input" not in st.session_state:
-    st.session_state.password_input = ""
 
 if not st.session_state.authenticated:
     st.session_state.password_input = st.text_input("Enter access password", type="password")
@@ -83,64 +70,39 @@ Score this case interview answer using the following criteria:
 Provide a score (poor, acceptable, or good) and 1 sentence of feedback for each criteria.
 """
 
-# --- Main UI ---
+# --- Display Case ---
 st.markdown("### Interview Question")
 st.markdown(question)
 
-# --- Record via Microphone ---
-st.markdown("### Option 1: Record your voice")
-mic_audio = audio_recorder(pause_threshold=2.0, sample_rate=44100)
-
+# --- File Upload ---
+audio_file = st.file_uploader("Upload a voice answer (MP3 or WAV)", type=["mp3", "wav"])
 transcript = ""
 
-if mic_audio:
-    st.audio(mic_audio, format="audio/wav")
-    st.write("Transcribing mic input with Deepgram...")
-    response = requests.post(
-        "https://api.deepgram.com/v1/listen",
-        headers={
-            "Authorization": f"Token {DEEPGRAM_API_KEY}",
-            "Content-Type": "audio/wav"
-        },
-        data=mic_audio
-    )
-
-    if response.status_code == 200:
-        transcript = response.json()["results"]["channels"][0]["alternatives"][0]["transcript"]
-        st.success("Mic transcription complete.")
-    else:
-        st.error("Mic transcription failed.")
-        st.code(response.text)
-
-# --- Upload Audio Option ---
-st.markdown("### Option 2: Upload an audio file (MP3 or WAV)")
-audio_file = st.file_uploader("Upload your voice answer", type=["wav", "mp3"])
 if audio_file:
     st.audio(audio_file)
-    st.write("Transcribing uploaded file with Deepgram...")
-    response = requests.post(
-        "https://api.deepgram.com/v1/listen",
-        headers={
-            "Authorization": f"Token {DEEPGRAM_API_KEY}",
-            "Content-Type": audio_file.type
-        },
-        data=audio_file.read()
-    )
+    with st.spinner("Transcribing with Deepgram..."):
+        response = requests.post(
+            "https://api.deepgram.com/v1/listen",
+            headers={
+                "Authorization": f"Token {DEEPGRAM_API_KEY}",
+                "Content-Type": audio_file.type
+            },
+            data=audio_file.read()
+        )
+        if response.status_code == 200:
+            transcript = response.json()["results"]["channels"][0]["alternatives"][0]["transcript"]
+            st.success("Transcription complete.")
+        else:
+            st.error("Transcription failed.")
+            st.code(response.text)
 
-    if response.status_code == 200:
-        transcript = response.json()["results"]["channels"][0]["alternatives"][0]["transcript"]
-        st.success("Upload transcription complete.")
-    else:
-        st.error("Upload transcription failed.")
-        st.code(response.text)
-
-# --- Text Input ---
+# --- Text Area ---
 st.markdown("### Final Answer (edit if needed)")
-user_input = st.text_area("Answer:", value=transcript, height=200)
+user_input = st.text_area("Your answer:", value=transcript, height=200)
 
-# --- Submit Answer ---
+# --- Submit Button ---
 if st.button("Submit") and user_input.strip():
-    with st.spinner("Analyzing your response..."):
+    with st.spinner("Scoring your response..."):
         headers = {
             "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
             "Content-Type": "application/json"
@@ -155,17 +117,13 @@ if st.button("Submit") and user_input.strip():
             "temperature": 0.4
         }
 
-        response = requests.post(
-            "https://api.deepseek.com/v1/chat/completions",
-            headers=headers,
-            data=json.dumps(payload)
-        )
+        response = requests.post("https://api.deepseek.com/v1/chat/completions", headers=headers, data=json.dumps(payload))
 
         if response.status_code == 200:
             result = response.json()
             feedback = result["choices"][0]["message"]["content"]
-            st.success("Done!")
-            st.markdown("### Feedback:")
+            st.success("Scoring complete.")
+            st.markdown("### Feedback")
             st.write(feedback)
 
             scores = [int(s) for s in re.findall(r"\b([0-9]{1,2}|100)\b", feedback)]
@@ -175,5 +133,5 @@ if st.button("Submit") and user_input.strip():
             sheet.append_row([timestamp, user_input.strip(), feedback.strip(), avg_score])
             st.info("Your answer has been logged.")
         else:
-            st.error(f"API Error: {response.status_code}")
+            st.error(f"Deepseek API error: {response.status_code}")
             st.code(response.text)
