@@ -75,20 +75,24 @@ st.markdown("### Interview Question")
 st.markdown(question)
 
 # --- File Upload ---
-audio_file = st.file_uploader("Upload a voice answer (MP3 or WAV)", type=["mp3", "wav"])
+audio_file = st.file_uploader("Upload a voice answer (MP3, WAV, or M4A)", type=["mp3", "wav", "m4a"])
 transcript = ""
 
 if audio_file:
     st.audio(audio_file)
+
+    mime_type = audio_file.type or "audio/m4a"
+
     with st.spinner("Transcribing with Deepgram..."):
         response = requests.post(
             "https://api.deepgram.com/v1/listen",
             headers={
-                "Authorization": f"Token {DEEPGRAM_API_KEY}",
-                "Content-Type": audio_file.type
+                "Authorization": f"Token " + DEEPGRAM_API_KEY,
+                "Content-Type": mime_type
             },
             data=audio_file.read()
         )
+
         if response.status_code == 200:
             transcript = response.json()["results"]["channels"][0]["alternatives"][0]["transcript"]
             st.success("Transcription complete.")
