@@ -41,6 +41,8 @@ if "step" not in st.session_state:
     st.session_state.step = 1
 if "audio_bytes" not in st.session_state:
     st.session_state.audio_bytes = None
+if "audio_b64" not in st.session_state:
+    st.session_state.audio_b64 = None
 if "transcript" not in st.session_state:
     st.session_state.transcript = ""
 if "final_answer" not in st.session_state:
@@ -113,8 +115,10 @@ if st.session_state.step == 1:
               reader.onloadend = () => {
                 const base64data = reader.result.split(',')[1];
                 const msg = { data: base64data };
-                console.log("Posting audio to parent:", msg);
-                window.parent.postMessage(JSON.stringify(msg), '*');
+                setTimeout(() => {
+                  console.log("Posting audio to parent after delay:", msg);
+                  (window.parent || window.top).postMessage(JSON.stringify(msg), '*');
+                }, 500);
               };
               reader.readAsDataURL(blob);
             };
@@ -134,32 +138,32 @@ if st.session_state.step == 1:
     </html>
     """, height=300)
 
-    b64_audio = st_javascript("""await new Promise((resolve) => {
-      window.addEventListener("message", (event) => {
-        if (event.data && typeof event.data === "string") {
-          const parsed = JSON.parse(event.data);
-          if (parsed.data) {
-            console.log("Received base64 audio from iframe:", parsed.data.slice(0, 30));
-            resolve(parsed.data);
-          }
-        }
-      }, { once: true });
-    });""")
+    if st.session_state.audio_b64 is None:
+        b64_audio = st_javascript("""await new Promise((resolve) => {
+          window.addEventListener("message", (event) => {
+            if (event.data && typeof event.data === "string") {
+              const parsed = JSON.parse(event.data);
+              if (parsed.data) {
+                resolve(parsed.data);
+              }
+            }
+          }, { once: true });
+        });""")
 
-    st.text(f"DEBUG: b64_audio exists? {b64_audio is not None}")
+        if b64_audio:
+            st.session_state.audio_b64 = b64_audio
+            st.rerun()
 
-    if b64_audio:
+    if st.session_state.audio_b64 and st.session_state.audio_bytes is None:
         try:
-            st.session_state.audio_bytes = base64.b64decode(b64_audio)
+            st.session_state.audio_bytes = base64.b64decode(st.session_state.audio_b64)
             st.text("DEBUG: Audio decoded successfully")
         except Exception as e:
             st.error(f"Failed to decode base64 audio: {e}")
 
     if st.session_state.audio_bytes:
         st.audio(st.session_state.audio_bytes, format="audio/wav")
-        st.text("DEBUG: Audio is present, showing next button")
         if st.button("✅ Next Step"):
-            st.text("DEBUG: Next Step clicked")
             with st.spinner("Transcribing..."):
                 try:
                     transcript = transcribe_audio(st.session_state.audio_bytes, DEEPGRAM_API_KEY)
