@@ -138,28 +138,25 @@ if st.session_state.step == 1:
     </html>
     """, height=300)
 
-    if st.session_state.audio_b64 is None:
-        b64_audio = st_javascript("""await new Promise((resolve) => {
-          window.addEventListener("message", (event) => {
-            if (event.data && typeof event.data === "string") {
-              const parsed = JSON.parse(event.data);
-              if (parsed.data) {
-                resolve(parsed.data);
-              }
+    b64_audio = st_javascript("""await new Promise((resolve) => {
+      window.addEventListener("message", (event) => {
+        if (event.data && typeof event.data === "string") {
+          try {
+            const parsed = JSON.parse(event.data);
+            if (parsed.data) {
+              resolve(parsed.data);
             }
-          }, { once: true });
-        });""")
+          } catch (e) {
+            console.error("Failed to parse message", e);
+          }
+        }
+      }, { once: true });
+    });""")
 
-        if b64_audio:
-            st.session_state.audio_b64 = b64_audio
-            st.rerun()
-
-    if st.session_state.audio_b64 and st.session_state.audio_bytes is None:
-        try:
-            st.session_state.audio_bytes = base64.b64decode(st.session_state.audio_b64)
-            st.text("DEBUG: Audio decoded successfully")
-        except Exception as e:
-            st.error(f"Failed to decode base64 audio: {e}")
+    if b64_audio and b64_audio != st.session_state.get("audio_b64"):
+        st.session_state.audio_b64 = b64_audio
+        st.session_state.audio_bytes = base64.b64decode(b64_audio)
+        st.rerun()
 
     if st.session_state.audio_bytes:
         st.audio(st.session_state.audio_bytes, format="audio/wav")
