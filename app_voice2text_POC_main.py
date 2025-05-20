@@ -4,9 +4,7 @@ import json
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from util_functions import transcribe_audio, score_response, extract_score, log_to_sheet
-import streamlit.components.v1 as components
-import base64
-from streamlit_javascript import st_javascript
+from st_audiorec import st_audiorec
 
 # --- Secrets and Setup ---
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
@@ -41,8 +39,6 @@ if "step" not in st.session_state:
     st.session_state.step = 1
 if "audio_bytes" not in st.session_state:
     st.session_state.audio_bytes = None
-if "audio_b64" not in st.session_state:
-    st.session_state.audio_b64 = None
 if "transcript" not in st.session_state:
     st.session_state.transcript = ""
 if "final_answer" not in st.session_state:
@@ -82,76 +78,10 @@ if st.session_state.step == 1:
     st.markdown("### Step 1: Record your answer")
     st.markdown(QUESTION)
 
-    components.html("""
-    <!DOCTYPE html>
-    <html>
-      <body>
-        <p><strong>Record your answer:</strong></p>
-        <button id=\"start\">Start Recording</button>
-        <button id=\"stop\" disabled>Stop Recording</button>
+    audio_bytes = st_audiorec()
 
-        <script>
-          let mediaRecorder;
-          let audioChunks = [];
-
-          const startBtn = document.getElementById("start");
-          const stopBtn = document.getElementById("stop");
-
-          startBtn.onclick = async () => {
-            audioChunks = [];
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            mediaRecorder = new MediaRecorder(stream);
-
-            mediaRecorder.ondataavailable = e => {
-              audioChunks.push(e.data);
-            };
-
-            mediaRecorder.onstop = async () => {
-              const blob = new Blob(audioChunks, { type: "audio/wav" });
-              const reader = new FileReader();
-              reader.onloadend = () => {
-                const base64data = reader.result.split(',')[1];
-                const msg = { data: base64data };
-                (window.parent || window.top).postMessage(JSON.stringify(msg), '*');
-              };
-              reader.readAsDataURL(blob);
-            };
-
-            mediaRecorder.start();
-            startBtn.disabled = true;
-            stopBtn.disabled = false;
-          };
-
-          stopBtn.onclick = () => {
-            mediaRecorder.stop();
-            startBtn.disabled = false;
-            stopBtn.disabled = true;
-          };
-        </script>
-      </body>
-    </html>
-    """, height=200)
-
-    b64_audio = st_javascript("""await new Promise((resolve) => {
-      const handler = (event) => {
-        if (event.data && typeof event.data === "string") {
-          try {
-            const parsed = JSON.parse(event.data);
-            if (parsed.data) {
-              window.removeEventListener("message", handler);
-              resolve(parsed.data);
-            }
-          } catch (e) {
-            console.error("Failed to parse message", e);
-          }
-        }
-      };
-      window.addEventListener("message", handler);
-    });""")
-
-    if b64_audio and b64_audio != st.session_state.get("audio_b64"):
-        st.session_state.audio_b64 = b64_audio
-        st.session_state.audio_bytes = base64.b64decode(b64_audio)
+    if audio_bytes is not None:
+        st.session_state.audio_bytes = audio_bytes
         with st.spinner("Transcribing..."):
             try:
                 transcript = transcribe_audio(st.session_state.audio_bytes, DEEPGRAM_API_KEY)
