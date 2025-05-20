@@ -82,7 +82,7 @@ Provide a score (poor, acceptable, or good) and 1 sentence of feedback for each 
 if st.session_state.step == 1:
     st.markdown("### Interview Question")
     st.markdown(question)
-    st.markdown("### Step 1: Record your answer")
+    st.markdown("### Step 1: Record your answer, please play back to make sure you are happy with the answer.")
 
     audio_bytes = st_audiorec()
 
