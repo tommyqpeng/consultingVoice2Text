@@ -51,7 +51,12 @@ QUESTION = """
 Our client is SuperSoda, a top-three beverage producer in the United States that has approached McKinsey for help designing its product launch strategy.  
 
 **Situation description**  
-[...] (truncated for brevity)
+As an integrated beverage company, SuperSoda leads its own brand design, marketing, and sales efforts. The company also owns its entire beverage supply chain, including production of concentrates, bottling and packaging, and distribution to retail outlets. SuperSoda has a considerable number of brands across carbonated and noncarbonated drinks, five large bottling plants throughout the country, and distribution agreements with most major retailers.
+
+SuperSoda is evaluating the launch of a new product, a flavored sports drink called “Electro-Light.” Sports drinks are usually designed to replenish energy, with sugars, and electrolytes, or salts, in the body. However, Electro-Light has been formulated to focus more on the replenishment of electrolytes and has a lower sugar content compared to most other sports drinks. The company expects this new beverage to capitalize on the recent trend away from high-sugar products.
+
+**McKinsey study**  
+SuperSoda’s vice president of marketing has asked McKinsey to help analyze key factors surrounding the launch of Electro-Light and its own internal capabilities to support that effort.  
 
 **Question**  
 What key factors should SuperSoda consider when deciding whether or not to launch Electro-Light?
@@ -106,8 +111,8 @@ if st.session_state.step == 1:
               const reader = new FileReader();
               reader.onloadend = () => {
                 const base64data = reader.result.split(',')[1];
-                const msg = { data: base64data };
-                window.parent.postMessage(JSON.stringify(msg), '*');
+                localStorage.setItem('audioBlob', base64data);
+                location.reload();
               };
               reader.readAsDataURL(blob);
             };
@@ -127,20 +132,13 @@ if st.session_state.step == 1:
     </html>
     """, height=300)
 
-    from streamlit_javascript import st_javascript
-    b64_audio = st_javascript("""await new Promise((resolve) => {
-      window.addEventListener("message", (event) => {
-        if (event.data && typeof event.data === "string") {
-          const parsed = JSON.parse(event.data);
-          if (parsed.data) {
-            resolve(parsed.data);
-          }
-        }
-      }, { once: true });
-    });""")
+    if not st.session_state.audio_bytes:
+        audio_blob = st.experimental_get_query_params().get("audioBlob", [None])[0]
+        if audio_blob:
+            st.session_state.audio_bytes = base64.b64decode(audio_blob)
+            st.experimental_set_query_params(audioBlob=None)
 
-    if b64_audio:
-        st.session_state.audio_bytes = base64.b64decode(b64_audio)
+    if st.session_state.audio_bytes:
         st.audio(st.session_state.audio_bytes, format="audio/wav")
         if st.button("✅ Next Step"):
             with st.spinner("Transcribing..."):
