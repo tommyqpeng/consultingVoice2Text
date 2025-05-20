@@ -7,14 +7,13 @@ from datetime import datetime
 from oauth2client.service_account import ServiceAccountCredentials
 from st_audiorec import st_audiorec
 
-# --- Google Sheets Setup ---
+# --- Setup ---
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
 creds_dict = json.loads(st.secrets["GSHEET_CREDS"])
 creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
 client = gspread.authorize(creds)
 sheet = client.open_by_key(st.secrets["AnswerStorage_Sheet_ID"]).sheet1
 
-# --- Secrets ---
 DEEPSEEK_API_KEY = st.secrets["DEEPSEEK_API_KEY"]
 DEEPGRAM_API_KEY = st.secrets["DEEPGRAM_API_KEY"]
 APP_PASSWORD = st.secrets["APP_PASSWORD"]
@@ -25,8 +24,16 @@ if "password_attempts" not in st.session_state:
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 
+if "step" not in st.session_state:
+    st.session_state.step = 1
+if "audio_bytes" not in st.session_state:
+    st.session_state.audio_bytes = None
+if "transcript" not in st.session_state:
+    st.session_state.transcript = ""
+if "final_answer" not in st.session_state:
+    st.session_state.final_answer = ""
+
 st.title("Interview Question Survey")
-st.info("Please record your answer and edit the transcript if needed.")
 
 if st.session_state.password_attempts >= 3:
     st.error("Too many incorrect attempts. Reload the page to try again.")
@@ -40,8 +47,7 @@ if not st.session_state.authenticated:
         else:
             st.session_state.password_attempts += 1
             st.warning(f"Incorrect password. Attempts left: {3 - st.session_state.password_attempts}")
-    if not st.session_state.authenticated:
-        st.stop()
+    st.stop()
 
 # --- Case Question ---
 question = """
@@ -71,42 +77,62 @@ Score this case interview answer using the following criteria:
 Provide a score (poor, acceptable, or good) and 1 sentence of feedback for each criteria.
 """
 
-# --- Display Case ---
-st.markdown("### Interview Question")
-st.markdown(question)
+# --- Step 1: Show Question and Record ---
+if st.session_state.step == 1:
+    st.markdown("### Interview Question")
+    st.markdown(question)
+    st.markdown("### Step 1: Record your answer")
+    audio_bytes = st_audiorec()
 
-# --- Record Audio ---
-st.markdown("### Record your answer below")
-audio_bytes = st_audiorec()
+    if audio_bytes:
+        st.session_state.audio_bytes = audio_bytes
+        st.session_state.step = 2
+        st.experimental_rerun()
 
-transcript = ""
+# --- Step 2: Playback & Option to Re-record ---
+elif st.session_state.step == 2:
+    st.markdown("### Step 2: Listen to your answer")
+    st.audio(st.session_state.audio_bytes, format="audio/wav")
 
-if audio_bytes:
-    st.audio(audio_bytes, format="audio/wav")
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("Rerecord"):
+            st.session_state.audio_bytes = None
+            st.session_state.step = 1
+            st.experimental_rerun()
+    with col2:
+        if st.button("Transcribe"):
+            with st.spinner("Transcribing with Deepgram..."):
+                response = requests.post(
+                    "https://api.deepgram.com/v1/listen",
+                    headers={
+                        "Authorization": f"Token {DEEPGRAM_API_KEY}",
+                        "Content-Type": "audio/wav"
+                    },
+                    data=st.session_state.audio_bytes
+                )
 
-    with st.spinner("Transcribing with Deepgram..."):
-        response = requests.post(
-            "https://api.deepgram.com/v1/listen",
-            headers={
-                "Authorization": f"Token {DEEPGRAM_API_KEY}",
-                "Content-Type": "audio/wav"
-            },
-            data=audio_bytes
-        )
+                if response.status_code == 200:
+                    st.session_state.transcript = response.json()["results"]["channels"][0]["alternatives"][0]["transcript"]
+                    st.session_state.step = 3
+                    st.experimental_rerun()
+                else:
+                    st.error("Transcription failed.")
+                    st.code(response.text)
 
-        if response.status_code == 200:
-            transcript = response.json()["results"]["channels"][0]["alternatives"][0]["transcript"]
-            st.success("Transcription complete.")
-        else:
-            st.error("Transcription failed.")
-            st.code(response.text)
+# --- Step 3: Show editable transcript ---
+elif st.session_state.step == 3:
+    st.markdown("### Step 3: Review and edit your transcript")
+    st.session_state.final_answer = st.text_area("Edit your answer:", value=st.session_state.transcript, height=200)
 
-# --- Text Area ---
-st.markdown("### Final Answer (edit transcript if needed)")
-user_input = st.text_area("Your answer:", value=transcript, height=200)
+    if st.button("Submit for Feedback"):
+        st.session_state.step = 4
+        st.experimental_rerun()
 
-# --- Submit and Score ---
-if st.button("Submit") and user_input.strip():
+# --- Step 4: Score answer and show feedback ---
+elif st.session_state.step == 4:
+    st.markdown("### Step 4: Feedback on your answer")
+
     with st.spinner("Scoring your response..."):
         headers = {
             "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
@@ -117,7 +143,7 @@ if st.button("Submit") and user_input.strip():
             "model": "deepseek-chat",
             "messages": [
                 {"role": "system", "content": "You are a McKinsey case interview coach scoring responses."},
-                {"role": "user", "content": f"{RUBRIC}\n\nInterview question:\n{question}\n\nCandidate's answer:\n{user_input}"}
+                {"role": "user", "content": f"{RUBRIC}\n\nInterview question:\n{question}\n\nCandidate's answer:\n{st.session_state.final_answer}"}
             ],
             "temperature": 0.4
         }
@@ -125,8 +151,7 @@ if st.button("Submit") and user_input.strip():
         response = requests.post("https://api.deepseek.com/v1/chat/completions", headers=headers, data=json.dumps(payload))
 
         if response.status_code == 200:
-            result = response.json()
-            feedback = result["choices"][0]["message"]["content"]
+            feedback = response.json()["choices"][0]["message"]["content"]
             st.success("Scoring complete.")
             st.markdown("### Feedback")
             st.write(feedback)
@@ -135,7 +160,7 @@ if st.button("Submit") and user_input.strip():
             avg_score = round(sum(scores) / len(scores), 1) if scores else "N/A"
 
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            sheet.append_row([timestamp, user_input.strip(), feedback.strip(), avg_score])
+            sheet.append_row([timestamp, st.session_state.final_answer.strip(), feedback.strip(), avg_score])
             st.info("Your answer has been logged.")
         else:
             st.error(f"Deepseek API error: {response.status_code}")
