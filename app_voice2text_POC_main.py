@@ -78,45 +78,35 @@ Score this case interview answer using the following criteria:
 Provide a score (poor, acceptable, or good) and 1 sentence of feedback for each criteria.
 """
 
-# --- Step 1: Record + Playback + Happy/Retry ---
+# --- Step 1: Record + Next ---
 if st.session_state.step == 1:
     st.markdown("### Interview Question")
     st.markdown(question)
     st.markdown("### Step 1: Record your answer")
 
-    if not st.session_state.audio_bytes:
-        st.markdown("Click **Start Recording**, then **Stop** when done. You can optionally **Download** or **Reset**.")
-        audio_bytes = st_audiorec()
-        if audio_bytes:
-            st.session_state.audio_bytes = audio_bytes
-            st.rerun()
-    else:
-        st.audio(st.session_state.audio_bytes, format="audio/wav")
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("🔁 Re-record"):
-                st.session_state.audio_bytes = None
-                st.rerun()
-        with col2:
-            if st.button("✅ Happy, Next Step"):
-                with st.spinner("Transcribing with Deepgram..."):
-                    response = requests.post(
-                        "https://api.deepgram.com/v1/listen",
-                        headers={
-                            "Authorization": f"Token {DEEPGRAM_API_KEY}",
-                            "Content-Type": "audio/wav"
-                        },
-                        data=st.session_state.audio_bytes
-                    )
+    audio_bytes = st_audiorec()
 
-                    if response.status_code == 200:
-                        st.session_state.transcript = response.json()["results"]["channels"][0]["alternatives"][0]["transcript"]
-                        st.session_state.step = 2
-                        st.rerun()
-                    else:
-                        st.error("Transcription failed.")
-                        st.code(response.text)
-
+    if audio_bytes:
+        st.session_state.audio_bytes = audio_bytes
+        st.audio(audio_bytes, format="audio/wav")
+        if st.button("✅ Next Step"):
+            with st.spinner("Transcribing..."):
+                response = requests.post(
+                    "https://api.deepgram.com/v1/listen",
+                    headers={
+                        "Authorization": f"Token {DEEPGRAM_API_KEY}",
+                        "Content-Type": "audio/wav"
+                    },
+                    data=audio_bytes
+                )
+                if response.status_code == 200:
+                    st.session_state.transcript = response.json()["results"]["channels"][0]["alternatives"][0]["transcript"]
+                    st.session_state.step = 2
+                    st.rerun()
+                else:
+                    st.error("Transcription failed.")
+                    st.code(response.text)
+                    
 # --- Step 2: Transcript Editing ---
 elif st.session_state.step == 2:
     st.markdown("### Step 2: Review and edit your transcript")
