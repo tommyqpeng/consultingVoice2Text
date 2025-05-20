@@ -5,6 +5,7 @@ import gspread
 import re
 from datetime import datetime
 from oauth2client.service_account import ServiceAccountCredentials
+from st_audiorec import st_audiorec  # <- NEW
 
 # --- Google Sheets Setup ---
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
@@ -25,7 +26,7 @@ if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 
 st.title("Interview Question Survey")
-st.info("Please answer in **English**. You may upload an audio response (MP3/WAV/M4A) or type it.")
+st.info("Please answer in **English**. You may record or upload a voice response, or type your answer.")
 
 if st.session_state.password_attempts >= 3:
     st.error("Too many incorrect attempts. Reload the page to try again.")
@@ -74,16 +75,42 @@ Provide a score (poor, acceptable, or good) and 1 sentence of feedback for each 
 st.markdown("### Interview Question")
 st.markdown(question)
 
-# --- File Upload ---
-audio_file = st.file_uploader("Upload a voice answer (MP3, WAV, or M4A)", type=["mp3", "wav", "m4a"])
+# --- Record Audio ---
+st.markdown("### Option 1: Record your answer below")
+audio_bytes = st_audiorec()
+
+# --- File Upload Option ---
+st.markdown("### Option 2: Upload a voice file (MP3, WAV, M4A)")
+audio_file = st.file_uploader("Upload your file", type=["mp3", "wav", "m4a"])
+
+# --- Transcription ---
 transcript = ""
 
-if audio_file:
-    st.audio(audio_file)
+if audio_bytes:
+    st.audio(audio_bytes, format="audio/wav")
 
+    with st.spinner("Transcribing recorded audio with Deepgram..."):
+        response = requests.post(
+            "https://api.deepgram.com/v1/listen",
+            headers={
+                "Authorization": f"Token {DEEPGRAM_API_KEY}",
+                "Content-Type": "audio/wav"
+            },
+            data=audio_bytes
+        )
+
+        if response.status_code == 200:
+            transcript = response.json()["results"]["channels"][0]["alternatives"][0]["transcript"]
+            st.success("Transcription complete.")
+        else:
+            st.error("Transcription failed.")
+            st.code(response.text)
+
+elif audio_file:
+    st.audio(audio_file)
     mime_type = audio_file.type or "audio/m4a"
 
-    with st.spinner("Transcribing with Deepgram..."):
+    with st.spinner("Transcribing uploaded audio with Deepgram..."):
         response = requests.post(
             "https://api.deepgram.com/v1/listen",
             headers={
@@ -104,7 +131,7 @@ if audio_file:
 st.markdown("### Final Answer (edit if needed)")
 user_input = st.text_area("Your answer:", value=transcript, height=200)
 
-# --- Submit Button ---
+# --- Submit and Score ---
 if st.button("Submit") and user_input.strip():
     with st.spinner("Scoring your response..."):
         headers = {
