@@ -82,12 +82,22 @@ if st.session_state.step == 1:
     st.markdown("### Interview Question")
     st.markdown(question)
     st.markdown("### Step 1: Record your answer")
-    audio_bytes = st_audiorec()
 
-    if audio_bytes:
-        st.session_state.audio_bytes = audio_bytes
+    if "audio_bytes_temp" not in st.session_state:
+        st.session_state.audio_bytes_temp = None
+
+    if st.session_state.audio_bytes_temp:
+        # Hide recorder and show processing before moving on
+        st.info("Processing your recording... please wait.")
+        st.session_state.audio_bytes = st.session_state.audio_bytes_temp
+        st.session_state.audio_bytes_temp = None
         st.session_state.step = 2
         st.rerun()
+    else:
+        audio_bytes = st_audiorec()
+        if audio_bytes:
+            st.session_state.audio_bytes_temp = audio_bytes
+            st.rerun()
 
 # --- Step 2: Playback & Option to Re-record ---
 elif st.session_state.step == 2:
@@ -97,7 +107,9 @@ elif st.session_state.step == 2:
     col1, col2 = st.columns(2)
     with col1:
         if st.button("Rerecord"):
+            # 🔁 Clear audio and go back to Step 1
             st.session_state.audio_bytes = None
+            st.session_state.audio_bytes_temp = None
             st.session_state.step = 1
             st.rerun()
     with col2:
