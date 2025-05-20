@@ -6,6 +6,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 from util_functions import transcribe_audio, score_response, extract_score, log_to_sheet
 import streamlit.components.v1 as components
 import base64
+from streamlit_javascript import st_javascript
 
 # --- Secrets and Setup ---
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
@@ -111,8 +112,8 @@ if st.session_state.step == 1:
               const reader = new FileReader();
               reader.onloadend = () => {
                 const base64data = reader.result.split(',')[1];
-                localStorage.setItem('audioBlob', base64data);
-                location.reload();
+                const msg = { data: base64data };
+                window.parent.postMessage(JSON.stringify(msg), '*');
               };
               reader.readAsDataURL(blob);
             };
@@ -132,21 +133,26 @@ if st.session_state.step == 1:
     </html>
     """, height=300)
 
-    if not st.session_state.audio_bytes:
-        audio_blob = st.query_params.get("audioBlob", [None])[0]
-        st.write("DEBUG: audioBlob from query params:", audio_blob)
-        if audio_blob:
-            try:
-                st.session_state.audio_bytes = base64.b64decode(audio_blob)
-                st.query_params.clear()
-            except Exception as e:
-                st.error(f"Failed to decode audio blob: {e}")
+    b64_audio = st_javascript("""await new Promise((resolve) => {
+      window.addEventListener("message", (event) => {
+        if (event.data && typeof event.data === "string") {
+          const parsed = JSON.parse(event.data);
+          if (parsed.data) {
+            resolve(parsed.data);
+          }
+        }
+      }, { once: true });
+    });""")
+
+    if b64_audio:
+        try:
+            st.session_state.audio_bytes = base64.b64decode(b64_audio)
+        except Exception as e:
+            st.error(f"Failed to decode base64 audio: {e}")
 
     if st.session_state.audio_bytes:
         st.audio(st.session_state.audio_bytes, format="audio/wav")
-        st.write("DEBUG: Audio loaded, showing Next Step button")
         if st.button("✅ Next Step"):
-            st.write("DEBUG: Next Step button clicked")
             with st.spinner("Transcribing..."):
                 try:
                     transcript = transcribe_audio(st.session_state.audio_bytes, DEEPGRAM_API_KEY)
