@@ -3,7 +3,7 @@ import streamlit as st
 import json
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
-from functions import transcribe_audio, score_response, extract_score, log_to_sheet
+from util_functions import transcribe_audio, score_response, extract_score, log_to_sheet
 import streamlit.components.v1 as components
 import base64
 
