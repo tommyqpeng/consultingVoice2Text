@@ -72,19 +72,25 @@ Score this case interview answer using the following criteria:
 Provide a score (poor, acceptable, or good) and 1 sentence of feedback for each criteria.
 """
 
-# --- Step 1: Record ---
+# --- Step 1: Record or Upload ---
 if st.session_state.step == 1:
     st.title("Interview Question Survey")
-    st.markdown("### Step 1: Record your answer")
+    st.markdown("### Step 1: Record or upload your answer")
     st.markdown(QUESTION)
 
-    audio_bytes = st_audiorec()
+    st.markdown("#### Option 1: Record")
+    recorded_audio = st_audiorec()
 
-    if audio_bytes is not None:
+    st.markdown("#### Option 2: Upload .wav or .m4a")
+    uploaded_file = st.file_uploader("Upload audio file", type=["wav", "m4a"])
+
+    audio_bytes = recorded_audio or (uploaded_file.read() if uploaded_file else None)
+
+    if audio_bytes:
         st.session_state.audio_bytes = audio_bytes
         with st.spinner("Transcribing..."):
             try:
-                transcript = transcribe_audio(st.session_state.audio_bytes, DEEPGRAM_API_KEY)
+                transcript = transcribe_audio(audio_bytes, DEEPGRAM_API_KEY)
                 st.session_state.transcript = transcript
                 st.session_state.step = 2
                 st.rerun()
