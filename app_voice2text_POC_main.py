@@ -87,7 +87,7 @@ if st.session_state.step == 1:
     if audio_bytes:
         st.session_state.audio_bytes = audio_bytes
         st.session_state.step = 2
-        st.experimental_rerun()
+        st.rerun()
 
 # --- Step 2: Playback & Option to Re-record ---
 elif st.session_state.step == 2:
@@ -99,7 +99,7 @@ elif st.session_state.step == 2:
         if st.button("Rerecord"):
             st.session_state.audio_bytes = None
             st.session_state.step = 1
-            st.experimental_rerun()
+            st.rerun()
     with col2:
         if st.button("Transcribe"):
             with st.spinner("Transcribing with Deepgram..."):
@@ -115,7 +115,7 @@ elif st.session_state.step == 2:
                 if response.status_code == 200:
                     st.session_state.transcript = response.json()["results"]["channels"][0]["alternatives"][0]["transcript"]
                     st.session_state.step = 3
-                    st.experimental_rerun()
+                    st.rerun()
                 else:
                     st.error("Transcription failed.")
                     st.code(response.text)
@@ -127,7 +127,7 @@ elif st.session_state.step == 3:
 
     if st.button("Submit for Feedback"):
         st.session_state.step = 4
-        st.experimental_rerun()
+        st.rerun()
 
 # --- Step 4: Score answer and show feedback ---
 elif st.session_state.step == 4:
