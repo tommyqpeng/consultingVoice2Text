@@ -133,10 +133,10 @@ if st.session_state.step == 1:
     """, height=300)
 
     if not st.session_state.audio_bytes:
-        audio_blob = st.experimental_get_query_params().get("audioBlob", [None])[0]
+        audio_blob = st.query_params.get("audioBlob", [None])[0]
         if audio_blob:
             st.session_state.audio_bytes = base64.b64decode(audio_blob)
-            st.experimental_set_query_params(audioBlob=None)
+            st.query_params.clear()
 
     if st.session_state.audio_bytes:
         st.audio(st.session_state.audio_bytes, format="audio/wav")
