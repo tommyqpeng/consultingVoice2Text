@@ -89,7 +89,6 @@ if st.session_state.step == 1:
         <p><strong>Record your answer:</strong></p>
         <button id=\"start\">Start Recording</button>
         <button id=\"stop\" disabled>Stop Recording</button>
-        <audio id=\"player\" controls></audio>
 
         <script>
           let mediaRecorder;
@@ -97,7 +96,6 @@ if st.session_state.step == 1:
 
           const startBtn = document.getElementById("start");
           const stopBtn = document.getElementById("stop");
-          const player = document.getElementById("player");
 
           startBtn.onclick = async () => {
             audioChunks = [];
@@ -110,15 +108,11 @@ if st.session_state.step == 1:
 
             mediaRecorder.onstop = async () => {
               const blob = new Blob(audioChunks, { type: "audio/wav" });
-              player.src = URL.createObjectURL(blob);
               const reader = new FileReader();
               reader.onloadend = () => {
                 const base64data = reader.result.split(',')[1];
                 const msg = { data: base64data };
-                setTimeout(() => {
-                  console.log("Posting audio to parent after delay:", msg);
-                  (window.parent || window.top).postMessage(JSON.stringify(msg), '*');
-                }, 500);
+                (window.parent || window.top).postMessage(JSON.stringify(msg), '*');
               };
               reader.readAsDataURL(blob);
             };
@@ -136,7 +130,7 @@ if st.session_state.step == 1:
         </script>
       </body>
     </html>
-    """, height=300)
+    """, height=200)
 
     b64_audio = st_javascript("""await new Promise((resolve) => {
       window.addEventListener("message", (event) => {
@@ -156,19 +150,14 @@ if st.session_state.step == 1:
     if b64_audio and b64_audio != st.session_state.get("audio_b64"):
         st.session_state.audio_b64 = b64_audio
         st.session_state.audio_bytes = base64.b64decode(b64_audio)
-        st.rerun()
-
-    if st.session_state.audio_bytes:
-        st.audio(st.session_state.audio_bytes, format="audio/wav")
-        if st.button("✅ Next Step"):
-            with st.spinner("Transcribing..."):
-                try:
-                    transcript = transcribe_audio(st.session_state.audio_bytes, DEEPGRAM_API_KEY)
-                    st.session_state.transcript = transcript
-                    st.session_state.step = 2
-                    st.rerun()
-                except Exception as e:
-                    st.error(str(e))
+        with st.spinner("Transcribing..."):
+            try:
+                transcript = transcribe_audio(st.session_state.audio_bytes, DEEPGRAM_API_KEY)
+                st.session_state.transcript = transcript
+                st.session_state.step = 2
+                st.rerun()
+            except Exception as e:
+                st.error(str(e))
 
 # --- Step 2: Edit transcript ---
 elif st.session_state.step == 2:
