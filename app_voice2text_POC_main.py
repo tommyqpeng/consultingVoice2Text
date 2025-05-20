@@ -134,13 +134,19 @@ if st.session_state.step == 1:
 
     if not st.session_state.audio_bytes:
         audio_blob = st.query_params.get("audioBlob", [None])[0]
+        st.write("DEBUG: audioBlob from query params:", audio_blob)
         if audio_blob:
-            st.session_state.audio_bytes = base64.b64decode(audio_blob)
-            st.query_params.clear()
+            try:
+                st.session_state.audio_bytes = base64.b64decode(audio_blob)
+                st.query_params.clear()
+            except Exception as e:
+                st.error(f"Failed to decode audio blob: {e}")
 
     if st.session_state.audio_bytes:
         st.audio(st.session_state.audio_bytes, format="audio/wav")
+        st.write("DEBUG: Audio loaded, showing Next Step button")
         if st.button("✅ Next Step"):
+            st.write("DEBUG: Next Step button clicked")
             with st.spinner("Transcribing..."):
                 try:
                     transcript = transcribe_audio(st.session_state.audio_bytes, DEEPGRAM_API_KEY)
