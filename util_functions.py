@@ -1,6 +1,27 @@
 import requests
 from datetime import datetime
 import re
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseUpload
+import io
+
+# --- upload any audio file to Google Drive ---
+def upload_audio_to_drive(service_account_creds, file_bytes, filename, folder_id):
+    service = build('drive', 'v3', credentials=service_account_creds)
+
+    file_metadata = {
+        'name': filename,
+        'parents': [folder_id]
+    }
+
+    media = MediaIoBaseUpload(io.BytesIO(file_bytes), mimetype='audio/wav')
+    uploaded_file = service.files().create(
+        body=file_metadata,
+        media_body=media,
+        fields='id'
+    ).execute()
+
+    return uploaded_file.get('id')
 
 # --- Transcribe with Deepgram ---
 def transcribe_audio(audio_bytes: bytes, api_key: str) -> str:

@@ -1,9 +1,10 @@
 # app.py
 import streamlit as st
+from datetime import datetime 
 import json
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
-from util_functions import transcribe_audio, score_response, extract_score, log_to_sheet
+from util_functions import transcribe_audio, score_response, extract_score, log_to_sheet, upload_audio_to_drive
 from st_audiorec import st_audiorec
 
 # --- Secrets and Setup ---
@@ -16,6 +17,7 @@ sheet = client.open_by_key(st.secrets["AnswerStorage_Sheet_ID"]).sheet1
 DEEPSEEK_API_KEY = st.secrets["DEEPSEEK_API_KEY"]
 DEEPGRAM_API_KEY = st.secrets["DEEPGRAM_API_KEY"]
 APP_PASSWORD = st.secrets["APP_PASSWORD"]
+AUDIO_FOLDER_ID = st.secrets["AUDIO_FOLDER_ID"]
 
 # --- Auth ---
 if "password_attempts" not in st.session_state:
@@ -88,6 +90,16 @@ if st.session_state.step == 1:
 
     if audio_bytes:
         st.session_state.audio_bytes = audio_bytes
+    
+        # --- Upload to Google Drive ---
+        filename = f"response_{datetime.now().strftime('%Y%m%d_%H%M%S')}.wav"
+        try:
+            file_id = upload_audio_to_drive(creds, audio_bytes, filename, AUDIO_FOLDER_ID)
+            st.success(f"Audio uploaded to Drive (file ID: {file_id})")
+        except Exception as e:
+            st.warning(f"Could not upload to Google Drive: {e}")
+    
+        # --- Transcribe ---
         with st.spinner("Transcribing..."):
             try:
                 transcript = transcribe_audio(audio_bytes, DEEPGRAM_API_KEY)
