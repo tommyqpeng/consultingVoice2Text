@@ -133,18 +133,20 @@ if st.session_state.step == 1:
     """, height=200)
 
     b64_audio = st_javascript("""await new Promise((resolve) => {
-      window.addEventListener("message", (event) => {
+      const handler = (event) => {
         if (event.data && typeof event.data === "string") {
           try {
             const parsed = JSON.parse(event.data);
             if (parsed.data) {
+              window.removeEventListener("message", handler);
               resolve(parsed.data);
             }
           } catch (e) {
             console.error("Failed to parse message", e);
           }
         }
-      }, { once: true });
+      };
+      window.addEventListener("message", handler);
     });""")
 
     if b64_audio and b64_audio != st.session_state.get("audio_b64"):
