@@ -1,6 +1,8 @@
 streamlit
-streamlit-audiorec
 gspread
 oauth2client
-requests
-streamlit-javascript
+google-api-python-client
+google-auth
+google-auth-oauthlib
+google-auth-httplib2
+st_audiorec
