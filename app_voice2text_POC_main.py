@@ -90,13 +90,13 @@ if st.session_state.step == 1:
     if audio_bytes:
         st.session_state.audio_bytes = audio_bytes
     
-        # --- Upload to Google Drive ---
-        filename = f"response_{datetime.now().strftime('%Y%m%d_%H%M%S')}.wav"
-        try:
-            file_id = upload_audio_to_drive(creds, audio_bytes, filename, AUDIO_FOLDER_ID)
-            st.success(f"Audio uploaded to Drive (file ID: {file_id})")
-        except Exception as e:
-            st.warning(f"Could not upload to Google Drive: {e}")
+        # # --- Upload to Google Drive ---
+        # filename = f"response_{datetime.now().strftime('%Y%m%d_%H%M%S')}.wav"
+        # try:
+        #     file_id = upload_audio_to_drive(creds, audio_bytes, filename, AUDIO_FOLDER_ID)
+        #     st.success(f"Audio uploaded to Drive (file ID: {file_id})")
+        # except Exception as e:
+        #     st.warning(f"Could not upload to Google Drive: {e}")
     
         # --- Transcribe ---
         with st.spinner("Transcribing..."):
